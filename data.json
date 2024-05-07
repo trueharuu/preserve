@@ -1,0 +1,47 @@
+{
+  "users": {
+    "504698587221852172": {
+      "current": {
+        "id": "504698587221852172",
+        "bot": false,
+        "system": false,
+        "username": "v.ea",
+        "globalName": "mina",
+        "discriminator": "0",
+        "avatar": "03c95a0b93d559836a91307547d4ebdb",
+        "avatarDecoration": null,
+        "flags": 256
+      },
+      "timestamp": 1714977320737,
+      "revisions": []
+    }
+  },
+  "members": {
+    "1031692332824793089": {
+      "504698587221852172": {
+        "current": {
+          "joinedTimestamp": 1666045020160,
+          "premiumSinceTimestamp": null,
+          "nickname": "1",
+          "pending": false,
+          "communicationDisabledUntilTimestamp": null,
+          "avatar": null,
+          "guildId": "1031692332824793089",
+          "flags": 0
+        },
+        "timestamp": 1714977320740,
+        "revisions": [
+          {
+            "timestamp": 1714977320740,
+            "changes": {
+              "nickname": [
+                "2",
+                "1"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}
