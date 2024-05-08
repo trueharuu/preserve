@@ -1,21 +1,18 @@
 import {
     Client,
     GatewayIntentBits,
+    Guild,
     GuildMember,
     PartialGuildMember,
     RESTOptions,
     User,
 } from 'discord.js';
 import { KV } from './kv.js';
-import { Db } from './model.js';
+import { Db, DbMember, DbUser } from './model.js';
 import { Entry } from './entry.js';
 import { tracing } from './index.js';
-import {
-    MinimizedGuildMember,
-    MinimizedUser,
-    minimizeGuildMember,
-    minimizeUser,
-} from './minimize.js';
+import { minimizeGuildMember, minimizeUser } from './minimize.js';
+import { Manager } from './manager.js';
 
 export class Collect {
     public readonly client: Client;
@@ -24,6 +21,7 @@ export class Collect {
     public constructor(
         public readonly auth: string,
         public readonly db: KV<Db>,
+        public readonly mng: Manager,
     ) {
         [this.kind, this.token] = auth.split(' ') as [
             RESTOptions['authPrefix'],
@@ -117,25 +115,31 @@ export class Collect {
         this.client.on('entitlementDelete', () => {});
         this.client.on('entitlementUpdate', () => {});
         this.client.on('guildAuditLogEntryCreate', () => {});
-        this.client.on('guildAvailable', () => {});
+        this.client.on('guildAvailable', (g) => {
+            this.guild(g);
+        });
         this.client.on('guildBanAdd', (b) => {
             this.user(b.user);
         });
         this.client.on('guildBanRemove', (b) => {
             this.user(b.user);
         });
-        this.client.on('guildCreate', () => {});
-        this.client.on('guildDelete', () => {});
+        this.client.on('guildCreate', (g) => {
+            this.guild(g);
+        });
+        this.client.on('guildDelete', (g) => {
+            this.guild(g);
+        });
         this.client.on('guildIntegrationsUpdate', () => {});
         this.client.on('guildMemberAvailable', (m) => {
             this.member(m);
         });
 
         this.client.on('guildMemberAdd', (m) => {
-            this.member(m);
+            this.member(m, false);
         });
         this.client.on('guildMemberRemove', (m) => {
-            this.member(m);
+            this.member(m, true);
         });
         this.client.on('guildMemberUpdate', async (o, n) => {
             this.memberUpdate(o, n);
@@ -157,21 +161,76 @@ export class Collect {
         this.client.on('guildUpdate', () => {});
 
         // this.client.on('interactionCreate', () => {});
-        this.client.on('messageCreate', () => {});
-        this.client.on('messageDelete', () => {});
+        this.client.on('messageCreate', (m) => {
+            this.mng.sightUser(m.author.id);
+            this.user(m.author);
+
+            if (m.member !== null) {
+                this.member(m.member);
+            }
+        });
+        this.client.on('messageDelete', (m) => {
+            if (m.author !== null) {
+                this.mng.sightUser(m.author.id);
+                this.user(m.author);
+            }
+
+            if (m.member !== null) {
+                this.member(m.member);
+            }
+        });
         this.client.on('messageDeleteBulk', () => {});
-        this.client.on('messagePollVoteAdd', () => {});
-        this.client.on('messagePollVoteRemove', () => {});
-        this.client.on('messageReactionAdd', () => {});
-        this.client.on('messageReactionRemove', () => {});
+        this.client.on('messagePollVoteAdd', (_, b) => {
+            this.mng.sightUser(b);
+            this.mng.syncUser(b);
+        });
+        this.client.on('messagePollVoteRemove', (_, b) => {
+            this.mng.sightUser(b);
+            this.mng.syncUser(b);
+        });
+        this.client.on('messageReactionAdd', (_, b) => {
+            this.mng.sightUser(b.id);
+            this.mng.syncUser(b.id);
+        });
+        this.client.on('messageReactionRemove', (_, b) => {
+            this.mng.sightUser(b.id);
+            this.mng.syncUser(b.id);
+        });
         this.client.on('messageReactionRemoveAll', () => {});
         this.client.on('messageReactionRemoveEmoji', () => {});
-        this.client.on('messageUpdate', () => {});
+        this.client.on('messageUpdate', (o, m) => {
+            if (o.author !== null) {
+                this.mng.sightUser(o.author.id);
+                this.user(o.author);
+            }
 
-        this.client.on('presenceUpdate', () => {});
+            if (o.member !== null) {
+                this.member(o.member);
+            }
+
+            if (m.author !== null) {
+                this.mng.sightUser(m.author.id);
+                this.user(m.author);
+            }
+
+            if (m.member !== null) {
+                this.member(m.member);
+            }
+        });
+
+        this.client.on('presenceUpdate', (_, n) => {
+            this.mng.sightUser(n.userId);
+        });
 
         this.client.on('ready', async (c) => {
             tracing.debug('ready', `${c.user.tag} [${c.user.id}]`);
+            for (const [, user] of c.users.cache) {
+                this.user(user);
+            }
+
+            for (const [, guild] of c.guilds.cache) {
+                this.guild(guild);
+            }
         });
 
         this.client.on('roleCreate', () => {});
@@ -200,6 +259,8 @@ export class Collect {
             if (u !== undefined) {
                 this.user(u as User);
             }
+
+            this.mng.sightUser(t.user.id);
         });
 
         this.client.on('userUpdate', (t) => {
@@ -217,37 +278,26 @@ export class Collect {
     }
 
     public user(n: User): void {
-        this.db.transact('users', (v) => {
-            v ??= {};
-            const e: Entry<MinimizedUser> = Entry.create(
-                minimizeUser(n),
-                v[n.id],
-            );
-            v[n.id] = e.raw;
-            return v;
-        });
+        this.mng.syncUserWith(n);
     }
 
     public userUpdate(o: User, n: User): void {
         this.db.transact('users', (v) => {
             v ??= {};
-            const e: Entry<MinimizedUser> = Entry.create(
-                minimizeUser(o),
-                v[n.id],
-            );
+            const e: Entry<DbUser> = Entry.create(minimizeUser(o), v[n.id]);
             e.update(minimizeUser(n));
             v[n.id] = e.raw;
             return v;
         });
     }
 
-    public member(m: GuildMember | PartialGuildMember): void {
+    public member(m: GuildMember | PartialGuildMember, left?: boolean): void {
         this.user(m.user);
         this.db.transact('members', (v) => {
             v ??= {};
             v[m.guild.id] ??= {};
-            const e: Entry<MinimizedGuildMember> = Entry.create(
-                minimizeGuildMember(m),
+            const e: Entry<DbMember> = Entry.create(
+                minimizeGuildMember(m, left),
                 v[m.guild.id]![m.id],
             );
             v[m.guild.id]![m.id] = e.raw;
@@ -263,7 +313,7 @@ export class Collect {
         this.db.transact('members', (v) => {
             v ??= {};
             v[o.guild.id] ??= {};
-            const e: Entry<MinimizedGuildMember> = Entry.create(
+            const e: Entry<DbMember> = Entry.create(
                 minimizeGuildMember(o),
                 v[o.guild.id]![o.id],
             );
@@ -271,5 +321,9 @@ export class Collect {
             v[o.guild.id]![o.id] = e.raw;
             return v;
         });
+    }
+
+    public guild(g: Guild, deleted: boolean = false): void {
+        this.mng.syncGuildWith(g, deleted);
     }
 }

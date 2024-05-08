@@ -1,4 +1,5 @@
 import { tracing } from './index.js';
+import { eq } from './tools.js';
 import { Delta, RawEntry, Revision } from './types.js';
 
 export class Entry<T> {
@@ -75,7 +76,7 @@ export class Entry<T> {
                 continue;
             }
 
-            if (p[key as never] !== r[key as never]) {
+            if (!eq(p[key as never], r[key as never])) {
                 changes[key as never] = [
                     p[key as never],
                     r[key as never],

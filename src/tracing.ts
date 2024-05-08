@@ -33,21 +33,19 @@ export class Tracing {
         this.l = label;
     }
 
-    public info(label: string | null, message: string): void {
+    public info(message: string, label?: string): void {
         return this.log(Level.Info, label || this.l, message);
     }
 
-    public debug(label: string | null, message: string): void {
+    public debug(message: string, label?: string): void {
         return this.log(Level.Debug, label || this.l, message);
     }
 
-    public warn(label: string | null, message: string): void {
+    public warning(message: string, label?: string): void {
         return this.log(Level.Warn, label || this.l, message);
     }
 
-    public error(label: string | null, message: string): void {
+    public error(message: string, label?: string): void {
         return this.log(Level.Error, label || this.l, message);
     }
-
-    
 }

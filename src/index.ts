@@ -4,6 +4,7 @@ import { KV } from './kv.js';
 import { readFileSync } from 'node:fs';
 import { Level, Tracing } from './tracing.js';
 import { Manager } from './manager.js';
+
 export const config: Config = parse(readFileSync('./config.toml', 'utf-8'));
 
 export const tracing: Tracing = new Tracing({

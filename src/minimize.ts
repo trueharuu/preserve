@@ -1,71 +1,55 @@
-import { GuildMember, PartialGuildMember, User } from 'discord.js';
-import {
-    Merge,
-    OnlyProperties,
-    Remove,
-    WithToJSON,
-    merge,
-    onlyProperties,
-    remove,
-    withToJSON,
-} from './types.js';
+import { Guild, GuildMember, PartialGuildMember, User } from 'discord.js';
+import { DbUser, DbMember, DbGuild } from './model.js';
 
-export type MinimizedGuildMember = WithToJSON<
-    Merge<
-        Remove<
-            OnlyProperties<GuildMember>,
-            'guild' | 'client' | 'partial' | 'user' | 'flags'
-        >,
-        {
-            guildId: string;
-            pending: boolean | null;
-            flags: number;
-        }
-    >
->;
 export function minimizeGuildMember(
     guildMember: PartialGuildMember | GuildMember,
-): MinimizedGuildMember {
-    return withToJSON(
-        merge(
-            remove(onlyProperties(guildMember), [
-                'guild',
-                'client',
-                'partial',
-                'user',
-                '_roles' as never,
-                'flags',
-            ]),
-            {
-                guildId: guildMember.guild.id,
-                flags: guildMember.flags.bitfield,
-            },
-        ),
-    );
+    left: boolean = false,
+): DbMember {
+    return {
+        avatar: guildMember.avatar,
+        communicationDisabledUntil:
+            guildMember.communicationDisabledUntilTimestamp,
+        flags: guildMember.flags.bitfield ?? 0,
+        id: guildMember.id,
+        joinedAt: guildMember.joinedTimestamp,
+        left,
+        nick: guildMember.nickname,
+        pending: guildMember.pending,
+        permissions: guildMember.permissions.bitfield.toString(),
+        premiumSince: guildMember.premiumSinceTimestamp,
+        roles: guildMember.roles.cache.map((x) => x.id),
+    };
 }
 
-export type MinimizedUser = WithToJSON<
-    Merge<
-        Remove<OnlyProperties<User>, 'client' | 'partial' | 'flags'>,
-        {
-            flags: number;
-        }
-    >
->;
-export function minimizeUser(
-    guildMember: Omit<User, '_equals'>,
-): MinimizedUser {
-    return withToJSON(
-        merge(
-            remove(onlyProperties(guildMember), [
-                'client',
-                'partial',
-                'flags',
-                '_equals' as never,
-            ]),
-            {
-                flags: guildMember.flags?.bitfield || 0,
-            },
-        ),
-    );
+export function minimizeUser(user: Omit<User, '_equals'>): DbUser {
+    return {
+        avatar: user.avatar,
+        avatarDecoration: user.avatarDecoration,
+        bot: user.bot,
+        discriminator: user.discriminator,
+        flags: user.flags?.bitfield ?? 0,
+        globalName: user.globalName,
+        id: user.id,
+        system: user.system,
+        username: user.username,
+    };
+}
+
+export function minimizeGuild(guild: Guild, deleted: boolean = false): DbGuild {
+    return {
+        banner: guild.banner,
+        description: guild.description,
+        discoverySplash: guild.discoverySplash,
+        emojis: guild.emojis.cache.map((x) => x.id),
+        features: guild.features as never,
+        icon: guild.icon,
+        id: guild.id,
+        name: guild.name,
+        ownerId: guild.ownerId,
+        roles: guild.roles.cache.map((x) => x.id),
+        splash: guild.splash,
+        stickers: guild.stickers.cache.map((x) => x.id),
+        vanityUrlCode: guild.vanityURLCode,
+        deleted,
+    };
 }
