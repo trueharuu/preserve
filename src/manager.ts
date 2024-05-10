@@ -1,104 +1,60 @@
-import { Collect } from './collect.js';
-import { KV } from './kv.js';
-import { Db, DbGuild, DbUser } from './model.js';
-import { minimizeGuild, minimizeUser } from './minimize.js';
-import { Entry } from './entry.js';
+import { Client, User } from 'discord.js';
+import { Insertable, Kysely, Selectable } from 'kysely';
 import { bot } from './bot/index.js';
-import { Client, Guild, User } from 'discord.js';
+import { Collect } from './collect.js';
+import { Changes, Db, DbUser } from './model.js';
+import { minimizeUser } from './minimize.js';
+import { revision } from './tools.js';
 
 export class Manager {
-    public readonly clients: Array<Collect>;
+    public readonly collectors: Array<Collect>;
+    public main!: Client;
     public constructor(
         public readonly token: string,
         public readonly tokens: Array<string>,
-        public readonly db: KV<Db>,
+        public readonly db: Kysely<Db>,
     ) {
-        this.clients = tokens.map((x) => new Collect(x, db, this));
+        this.collectors = tokens.map((x) => new Collect(x, db, this));
     }
 
     public async start(): Promise<void> {
-        for (const client of this.clients) {
-            client.setup();
-            await client.start();
+        for (const c of this.collectors) {
+            c.setup();
+            await c.start();
         }
         const c: Client = await bot(this);
         c.login(this.token);
+        this.main = c;
     }
 
-    public async getUser(id: string): Promise<Entry<DbUser> | null> {
-        this.syncUser(id);
-        return (
-            this.db.getThen('users', (x) =>
-                x[id] !== undefined ? new Entry(x[id]!) : null,
-            ) ?? null
-        );
+    public *pools(): Generator<Client<boolean>, void, undefined> {
+        yield this.main;
+        yield* this.collectors.map((x) => x.client);
     }
 
-    public async syncUser(id: string): Promise<User | null> {
-        let recent: User | null = null;
-        for (const c of this.clients) {
-            try {
-                recent = await c.client.users.fetch(id, { cache: true });
-                c.user(recent);
-            } catch {
-                continue;
-            }
+    public async user(user: User): Promise<void> {
+        const mini: Insertable<DbUser> = minimizeUser(user);
+        const current: Selectable<DbUser> | undefined = await this.db
+            .selectFrom('users')
+            .selectAll()
+            .where('id', '=', user.id)
+            .executeTakeFirst();
+        const v: Selectable<DbUser> | undefined = await this.db
+            .insertInto('users')
+            .values(mini)
+            .returningAll()
+            .executeTakeFirst();
+
+        if (current !== undefined && v !== undefined) {
+            const revs: Changes<Selectable<DbUser>> = revision(current, v);
+            await this.db
+                .insertInto('revisions')
+                .values({
+                    changes: revs,
+                    entry_id: v.entry_id,
+                    timestamp: Date.now(),
+                })
+                .executeTakeFirst();
         }
-
-        return recent;
-    }
-
-    public async syncUserWith(user: User): Promise<void> {
-        this.db.transact('users', (v) => {
-            v ??= {};
-            const e: Entry<DbUser> = Entry.create(
-                minimizeUser(user),
-                v[user.id],
-            );
-            v[user.id] = e.raw;
-            return v;
-        });
-    }
-
-    public sightUser(id: string): void {
-        this.db.transact('sightings', (v) => {
-            ((v ??= {})[id] ??= []).push(Date.now());
-            return v;
-        });
-    }
-
-    public async getGuild(id: string): Promise<Entry<DbGuild> | null> {
-        this.syncGuild(id);
-        return (
-            this.db.getThen('guilds', (x) =>
-                x[id] !== undefined ? new Entry(x[id]!) : null,
-            ) ?? null
-        );
-    }
-
-    public async syncGuild(id: string): Promise<Guild | null> {
-        let recent: Guild | null = null;
-        for (const c of this.clients) {
-            try {
-                recent = await c.client.guilds.fetch(id);
-                c.guild(recent);
-            } catch {
-                continue;
-            }
-        }
-
-        return recent;
-    }
-
-    public syncGuildWith(guild: Guild, deleted: boolean = false): void {
-        this.db.transact('guilds', (v) => {
-            v ??= {};
-            const e: Entry<DbGuild> = Entry.create(
-                minimizeGuild(guild, deleted),
-                v[guild.id],
-            );
-            v[guild.id] = e.raw;
-            return v;
-        });
     }
 }

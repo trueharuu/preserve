@@ -1,10 +1,12 @@
-import { Guild, GuildMember, PartialGuildMember, User } from 'discord.js';
+import { Guild, GuildMember, User } from 'discord.js';
 import { DbUser, DbMember, DbGuild } from './model.js';
+import { Insertable } from 'kysely';
 
 export function minimizeGuildMember(
-    guildMember: PartialGuildMember | GuildMember,
+    guildMember: GuildMember,
+    timestamp: number = Date.now(),
     left: boolean = false,
-): DbMember {
+): Insertable<DbMember> {
     return {
         avatar: guildMember.avatar,
         communicationDisabledUntil:
@@ -18,10 +20,14 @@ export function minimizeGuildMember(
         permissions: guildMember.permissions.bitfield.toString(),
         premiumSince: guildMember.premiumSinceTimestamp,
         roles: guildMember.roles.cache.map((x) => x.id),
+        timestamp,
     };
 }
 
-export function minimizeUser(user: Omit<User, '_equals'>): DbUser {
+export function minimizeUser(
+    user: Omit<User, '_equals'>,
+    timestamp: number = Date.now(),
+): Insertable<DbUser> {
     return {
         avatar: user.avatar,
         avatarDecoration: user.avatarDecoration,
@@ -32,10 +38,16 @@ export function minimizeUser(user: Omit<User, '_equals'>): DbUser {
         id: user.id,
         system: user.system,
         username: user.username,
+        banner: user.banner ?? null,
+        timestamp,
     };
 }
 
-export function minimizeGuild(guild: Guild, deleted: boolean = false): DbGuild {
+export function minimizeGuild(
+    guild: Guild,
+    timestamp: number = Date.now(),
+    deleted: boolean = false,
+): Insertable<DbGuild> {
     return {
         banner: guild.banner,
         description: guild.description,
@@ -51,5 +63,6 @@ export function minimizeGuild(guild: Guild, deleted: boolean = false): DbGuild {
         stickers: guild.stickers.cache.map((x) => x.id),
         vanityUrlCode: guild.vanityURLCode,
         deleted,
+        timestamp,
     };
 }

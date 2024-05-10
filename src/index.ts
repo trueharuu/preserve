@@ -1,6 +1,5 @@
 import { parse } from 'toml';
-import { Config, Db } from './model.js';
-import { KV } from './kv.js';
+import { Config, Db, setup } from './model.js';
 import { readFileSync } from 'node:fs';
 import { Level, Tracing } from './tracing.js';
 import { Manager } from './manager.js';
@@ -14,6 +13,13 @@ export const tracing: Tracing = new Tracing({
         return date.toLocaleTimeString();
     },
 });
-export const kv: KV<Db> = new KV(config.path);
-export const mng: Manager = new Manager(config.main, config.collectors, kv);
+import { Kysely, SqliteDialect } from 'kysely';
+import SQLite from 'better-sqlite3';
+
+export const dialect: SqliteDialect = new SqliteDialect({
+    database: new SQLite(':memory:'),
+});
+export const db: Kysely<Db> = new Kysely<Db>({ dialect });
+setup();
+export const mng: Manager = new Manager(config.main, config.collectors, db);
 mng.start();

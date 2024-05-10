@@ -23,7 +23,6 @@ module.exports = {
     },
     plugins: ['@typescript-eslint'],
     rules: {
-
         indent: ['error', 4],
         'linebreak-style': 'off',
         quotes: ['warn', 'single'],
@@ -55,7 +54,17 @@ module.exports = {
                 propertyDeclaration: true,
                 variableDeclaration: true,
                 variableDeclarationIgnoreFunction: true,
-                
+            },
+        ],
+        '@typescript-eslint/no-unused-vars': [
+            'warn',
+            {
+                vars: 'all',
+                args: 'all',
+                caughtErrors: 'all',
+                argsIgnorePattern: '^_',
+                caughtErrorsIgnorePattern: '^_',
+                destructuredArrayIgnorePattern: '^_',
             },
         ],
     },

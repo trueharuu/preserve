@@ -1,6 +1,7 @@
-import { DbUser } from './model.js';
+import { Selectable } from 'kysely';
+import { Changes, DbUser } from './model.js';
 
-export function userTag(t: DbUser): string {
+export function userTag(t: Selectable<DbUser>): string {
     if (t.discriminator === '0') {
         return t.username;
     }
@@ -24,4 +25,20 @@ export function eq<T>(t: T, u: T): boolean {
     }
 
     return t === u;
+}
+
+export function revision<T>(t: T, u: T): Changes<T> {
+    const v: object = {};
+
+    for (const prop in t) {
+        if (typeof t[prop] === 'function' || typeof u[prop] === 'function') {
+            continue;
+        }
+
+        if (!eq(t[prop], u[prop])) {
+            v[prop as never] = [t[prop], u[prop]] as never;
+        }
+    }
+
+    return v;
 }

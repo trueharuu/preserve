@@ -13,21 +13,6 @@ export type Merge<A, B> = {
             ? A[K]
             : never;
 };
-export type Delta<T> = [T, T];
-export type OldNew<T> = [T, undefined] | [undefined, T] | [T, T];
-export type Revision<T> = {
-    timestamp: number;
-    changes: {
-        [P in keyof T]?: Delta<T[P]>;
-    };
-};
-
-export interface RawEntry<T> {
-    current: T;
-    timestamp: number;
-    revisions: Array<Revision<T>>;
-}
-
 export type WithToJSON<T> = Merge<T, { toJSON(): unknown }>;
 export function onlyProperties<T>(t: T): OnlyProperties<T> {
     const v: OnlyProperties<T> = Object.assign({}, t);
